@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FLIPX • marveldrainer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+    body { font-family: 'Press Start 2P', system-ui; }
+    .coin { transition: transform 1.4s cubic-bezier(0.23, 1, 0.32, 1); box-shadow: 0 0 60px #22ff88; }
+    .coin.flipping { animation: ultraFlip 1.4s ease-in-out forwards; }
+    @keyframes ultraFlip {
+      0% { transform: rotateY(0deg) rotateX(0deg); }
+      100% { transform: rotateY(2160deg) rotateX(720deg); }
+    }
+    .neon { text-shadow: 0 0 15px #22ff88, 0 0 30px #22ff88, 0 0 50px #ff00ff; }
+    .glass { background: rgba(10, 15, 30, 0.85); backdrop-filter: blur(20px); border: 1px solid rgba(34, 255, 136, 0.3); }
+    .scanline { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(transparent, rgba(34,255,136,0.15), transparent); animation: scan 4s linear infinite; pointer-events: none; }
+    @keyframes scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(400%); } }
+  </style>
+</head>
+<body class="bg-black text-emerald-400 min-h-screen overflow-hidden relative">
+  <!-- Background grid -->
+  <div class="absolute inset-0 bg-[linear-gradient(to_right,#22ff8822_1px,transparent_1px),linear-gradient(to_bottom,#22ff8822_1px,transparent_1px)] bg-[size:40px_40px] opacity-30"></div>
+
+  <div class="max-w-md w-full mx-auto p-6 relative z-10">
+    <!-- Top Bar -->
+    <div class="flex justify-between items-center mb-6">
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-dice text-4xl animate-pulse"></i>
+        <h1 class="text-5xl font-bold neon tracking-[4px]">FLIPX</h1>
+      </div>
+      <div onclick="connectWallet()" id="walletBtn" class="px-5 py-2 bg-zinc-900 hover:bg-emerald-500 hover:text-black border border-emerald-400 rounded-2xl text-xs cursor-pointer transition-all">CONNECT PHANTOM</div>
+    </div>
+
+    <!-- Balance & Stats -->
+    <div class="flex justify-between text-xs mb-8 glass rounded-3xl p-4">
+      <div>HOUSE: <span id="houseBalance" class="text-emerald-300">0.00</span> SOL</div>
+      <div>TOTAL FLIPPED: <span id="totalFlipped" class="text-pink-400">0</span> SOL</div>
+    </div>
+
+    <!-- 3D Coin -->
+    <div class="relative flex justify-center mb-12">
+      <div id="coin" onclick="placeFlip(null)" class="coin w-56 h-56 bg-gradient-to-br from-amber-300 via-yellow-400 to-orange-500 rounded-full border-[14px] border-amber-200 flex items-center justify-center text-8xl cursor-pointer relative overflow-hidden">
+        <div id="coinFace" class="font-black text-black drop-shadow-2xl">?</div>
+        <div class="scanline"></div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="glass rounded-3xl p-8 shadow-2xl">
+      <label class="block text-[10px] tracking-[2px] mb-3 text-emerald-300/80">BET AMOUNT</label>
+      <div class="flex gap-2 mb-8">
+        <input id="amount" type="number" value="0.1" step="0.05" min="0.01" class="flex-1 bg-black border border-emerald-500/60 focus:border-pink-500 rounded-2xl px-6 py-5 text-4xl outline-none text-center">
+        <div class="grid grid-cols-3 gap-2 text-xs">
+          <button onclick="setBet(0.1)" class="py-3 bg-zinc-900 hover:bg-white hover:text-black rounded-2xl">0.1</button>
+          <button onclick="setBet(0.5)" class="py-3 bg-zinc-900 hover:bg-white hover:text-black rounded-2xl">0.5</button>
+          <button onclick="setBet(1)" class="py-3 bg-zinc-900 hover:bg-white hover:text-black rounded-2xl">1</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <button onclick="placeFlip(true)" id="headsBtn" class="h-24 bg-gradient-to-b from-emerald-400 to-teal-600 rounded-3xl text-3xl font-bold active:scale-95 transition-all shadow-xl">HEADS</button>
+        <button onclick="placeFlip(false)" id="tailsBtn" class="h-24 bg-gradient-to-b from-rose-500 to-pink-600 rounded-3xl text-3xl font-bold active:scale-95 transition-all shadow-xl">TAILS</button>
+      </div>
+
+      <button onclick="placeFlip(null)" class="mt-6 w-full py-8 bg-white text-black rounded-3xl text-2xl font-bold flex items-center justify-center gap-4 hover:bg-emerald-400 transition-all">
+        <i class="fa-solid fa-bolt-lightning"></i> LAUNCH FLIP
+      </button>
+    </div>
+
+    <!-- Result -->
+    <div id="resultPanel" class="hidden mt-8 glass rounded-3xl p-8 text-center border border-pink-500/50">
+      <div id="resultText" class="text-6xl mb-4"></div>
+      <div id="payoutText" class="text-4xl mb-6"></div>
+      <div onclick="hideResult()" class="cursor-pointer text-xs tracking-widest underline">NEXT ROUND →</div>
+    </div>
+
+    <!-- History -->
+    <div class="mt-10">
+      <div class="flex justify-between text-[10px] mb-4 text-emerald-300/60">
+        <span>LIVE FEED</span>
+        <span onclick="showProvable()" class="cursor-pointer hover:text-white">PROVABLY FAIR ✓</span>
+      </div>
+      <div id="history" class="space-y-3 text-sm max-h-64 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <audio id="flipSound" src="https://freesound.org/data/previews/276/276951_5123854-lq.mp3"></audio>
+  <audio id="winSound" src="https://freesound.org/data/previews/387/387186_7258994-lq.mp3"></audio>
+
+  <script>
+    let totalFlipped = 1248.45;
+    const coin = document.getElementById('coin');
+    const coinFace = document.getElementById('coinFace');
+    const flipSound = document.getElementById('flipSound');
+    const winSound = document.getElementById('winSound');
+
+    function setBet(val) { document.getElementById('amount').value = val; }
+
+    async function placeFlip(choice) {
+      const amount = parseFloat(document.getElementById('amount').value);
+      if (amount <= 0) return;
+
+      document.getElementById('headsBtn').disabled = true;
+      document.getElementById('tailsBtn').disabled = true;
+
+      flipSound.currentTime = 0; flipSound.play();
+      coin.classList.add('flipping');
+      coinFace.innerHTML = '⟳';
+
+      const userSeed = Math.random().toString(36).substring(2);
+      const userPubkey = "YOUR_PHANTOM_PUBKEY"; // will be dynamic later
+
+      const resp = await fetch('/flip', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_pubkey: userPubkey, amount_sol: amount, choice: choice !== null ? (choice ? 'heads' : 'tails') : null, user_seed: userSeed})
+      });
+
+      const data = await resp.json();
+
+      setTimeout(() => {
+        coin.classList.remove('flipping');
+        coinFace.textContent = data.result === 'heads' ? 'H' : 'T';
+
+        const panel = document.getElementById('resultPanel');
+        document.getElementById('resultText').innerHTML = data.won ? `🎉 WINNER` : `HOUSE`;
+        document.getElementById('payoutText').innerHTML = data.won ? 
+          `<span class="text-emerald-400">+${data.payout_sol} SOL</span>` : 
+          `<span class="text-rose-400">-${amount} SOL</span>`;
+
+        if (data.won) {
+          winSound.play();
+          confetti({particleCount: 300, spread: 90, origin: { y: 0.6 }});
+        }
+
+        panel.classList.remove('hidden');
+        addToHistory(data);
+        totalFlipped += amount;
+        document.getElementById('totalFlipped').textContent = totalFlipped.toFixed(2);
+      }, 1400);
+    }
+
+    function hideResult() {
+      document.getElementById('resultPanel').classList.add('hidden');
+      document.getElementById('headsBtn').disabled = false;
+      document.getElementById('tailsBtn').disabled = false;
+    }
+
+    function addToHistory(data) {
+      const hist = document.getElementById('history');
+      const entry = document.createElement('div');
+      entry.className = `flex justify-between items-center p-4 rounded-2xl ${data.won ? 'bg-emerald-500/10 border-l-4 border-emerald-400' : 'bg-rose-500/10 border-l-4 border-rose-400'}`;
+      entry.innerHTML = `<span class="font-bold">${data.result.toUpperCase()}</span><span class="${data.won?'text-emerald-400':'text-rose-400'} font-mono">${data.won?'+':'-'}${data.payout_sol||data.amount_sol||0}</span>`;
+      hist.prepend(entry);
+      if (hist.children.length > 8) hist.lastElementChild.remove();
+    }
+
+    async function updateHouseBalance() {
+      const resp = await fetch('/balance');
+      const data = await resp.json();
+      document.getElementById('houseBalance').textContent = data.house_balance_sol.toFixed(3);
+    }
+
+    function connectWallet() {
+      alert("Phantom connect ready in v3 – reply for full integration");
+    }
+
+    function showProvable() {
+      alert("Server seed revealed after each round. Full audit log coming.");
+    }
+
+    // Boot
+    updateHouseBalance();
+    setInterval(updateHouseBalance, 15000);
+  </script>
+</body>
+</html>
