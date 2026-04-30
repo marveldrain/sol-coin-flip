@@ -25,30 +25,20 @@ def coin_flip():
     data = request.json
     user_pubkey_str = data['user_pubkey']
     amount_sol = float(data['amount_sol'])
-    user_choice = data.get('choice')  # "heads", "tails", or None for random
+    user_choice = data.get('choice')
     user_seed = data.get('user_seed', secrets.token_hex(16))
 
     amount_lamports = int(amount_sol * 1_000_000_000)
 
-    # Provably Fair VRF
     recent_blockhash = str(client.get_latest_blockhash().value.blockhash)
     combined = f"{SERVER_SEED}:{user_seed}:{recent_blockhash}:{time.time()}".encode()
     vrf_hash = hashlib.sha256(combined).hexdigest()
     random_int = int(vrf_hash, 16) % 2
     flip_result = "heads" if random_int == 0 else "tails"
 
-    proof = {
-        "server_seed": SERVER_SEED,
-        "user_seed": user_seed,
-        "blockhash": recent_blockhash,
-        "vrf_hash": vrf_hash,
-        "result": flip_result
-    }
-
     if (user_choice is None) or (flip_result == user_choice):
-        # User wins 1.98x
         payout = int(amount_lamports * 1.98)
-        tx_sig = "SIMULATED_TX"
+        tx_sig = "SIMULATED"
         try:
             tx = Transaction().add(transfer(TransferParams(
                 from_pubkey=HOUSE_KEYPAIR.pubkey(),
@@ -58,19 +48,9 @@ def coin_flip():
             tx_sig = str(client.send_transaction(tx, HOUSE_KEYPAIR).value)
         except:
             pass
-        return jsonify({
-            "result": flip_result,
-            "won": True,
-            "payout_sol": round(payout / 1e9, 4),
-            "proof": proof,
-            "tx": tx_sig
-        })
+        return jsonify({"result": flip_result, "won": True, "payout_sol": round(payout / 1e9, 4), "tx": tx_sig})
     else:
-        return jsonify({
-            "result": flip_result,
-            "won": False,
-            "proof": proof
-        })
+        return jsonify({"result": flip_result, "won": False})
 
 @app.route('/balance', methods=['GET'])
 def house_balance():
@@ -78,4 +58,5 @@ def house_balance():
     return jsonify({"house_balance_sol": balance / 1e9})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
