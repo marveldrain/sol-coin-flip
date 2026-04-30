@@ -7,11 +7,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <script src="https://unpkg.com/@solana/web3.js@1.98.0/dist/web3.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
     body { font-family: 'Press Start 2P', system-ui; background: #0a0a0a; }
     .neon-text { text-shadow: 0 0 20px #22ff88, 0 0 40px #22ff88, 0 0 60px #ff00ff; }
-    .coin { box-shadow: 0 0 80px #22ff88, inset 0 0 40px rgba(255,255,255,0.6); transition: all 0.3s; }
+    .coin { box-shadow: 0 0 80px #22ff88, inset 0 0 40px rgba(255,255,255,0.6); }
     .coin.flipping { animation: ultraFlip 1.5s cubic-bezier(0.25, 0.1, 0.25, 1) forwards; }
     @keyframes ultraFlip { 0% { transform: rotateY(0deg) rotateX(0deg); } 100% { transform: rotateY(2520deg) rotateX(1080deg); } }
     .glass { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(16px); }
@@ -26,7 +27,11 @@
         <div class="text-4xl">🎲</div>
         <h1 class="text-5xl font-bold neon-text tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">FLIPX</h1>
       </div>
-      <button onclick="connectWallet()" class="px-6 py-2.5 border-2 border-emerald-400 rounded-2xl text-sm font-bold hover:bg-emerald-400 hover:text-black">CONNECT PHANTOM</button>
+      <button onclick="connectPhantom()" id="connectBtn" class="px-6 py-2.5 border-2 border-emerald-400 rounded-2xl text-sm font-bold hover:bg-emerald-400 hover:text-black">CONNECT PHANTOM</button>
+    </div>
+
+    <div id="walletInfo" class="hidden glass rounded-3xl p-4 text-xs mb-8">
+      Connected: <span id="userPubkey" class="font-mono text-emerald-300"></span>
     </div>
 
     <div class="glass rounded-3xl p-4 flex justify-between text-xs mb-8 border border-emerald-500/30">
@@ -69,25 +74,39 @@
   <audio id="winSound" src="https://freesound.org/data/previews/387/387186_7258994-lq.mp3"></audio>
 
   <script>
+    let userPubkey = null;
     let totalFlipped = 1248.45;
-    const coin = document.getElementById('coin');
-    const coinFace = document.getElementById('coinFace');
-    const flipSound = document.getElementById('flipSound');
-    const winSound = document.getElementById('winSound');
+
+    async function connectPhantom() {
+      try {
+        const provider = window.solana;
+        if (!provider) return alert("Phantom not installed");
+        await provider.connect();
+        userPubkey = provider.publicKey.toString();
+        document.getElementById('userPubkey').textContent = userPubkey.slice(0,8) + "..." + userPubkey.slice(-8);
+        document.getElementById('walletInfo').classList.remove('hidden');
+        document.getElementById('connectBtn').textContent = "CONNECTED ✓";
+      } catch (e) { alert("Connect failed"); }
+    }
 
     async function placeFlip(choice) {
+      if (!userPubkey) return alert("Connect Phantom first");
+
       const amount = parseFloat(document.getElementById('amount').value);
       if (amount <= 0) return alert("BET > 0");
 
       document.getElementById('headsBtn').disabled = true;
       document.getElementById('tailsBtn').disabled = true;
 
+      const flipSound = document.getElementById('flipSound');
       flipSound.currentTime = 0; flipSound.play();
+
+      const coin = document.getElementById('coin');
+      const coinFace = document.getElementById('coinFace');
       coin.classList.add('flipping');
       coinFace.innerHTML = '⟳';
 
       const userSeed = Math.random().toString(36).substring(2);
-      const userPubkey = "YOUR_PHANTOM_PUBKEY_HERE"; // Replace with real wallet connect later
 
       const resp = await fetch('/flip', {
         method: 'POST',
@@ -111,15 +130,14 @@
         document.body.appendChild(panel);
 
         if (data.won) {
-          winSound.play();
+          document.getElementById('winSound').play();
           confetti({particleCount: 400, spread: 100, origin: { y: 0.6 }});
         }
 
         addToHistory(data);
         totalFlipped += amount;
         document.getElementById('totalFlipped').textContent = totalFlipped.toFixed(1);
-        document.getElementById('headsBtn').disabled = false;
-        document.getElementById('tailsBtn').disabled = false;
+        resetButtons();
       }, 1500);
     }
 
@@ -132,7 +150,7 @@
       const hist = document.getElementById('history');
       const entry = document.createElement('div');
       entry.className = `flex justify-between p-4 glass rounded-2xl ${data.won ? 'border-l-4 border-emerald-400' : 'border-l-4 border-rose-400'}`;
-      entry.innerHTML = `<span class="font-bold">${data.result.toUpperCase()}</span><span class="font-mono ${data.won?'text-emerald-400':'text-rose-400'}">${data.won?'+':'-'}${(data.payout_sol || data.amount_sol||0).toFixed(2)}</span>`;
+      entry.innerHTML = `<span>${data.result.toUpperCase()}</span><span class="font-mono ${data.won?'text-emerald-400':'text-rose-400'}">${data.won?'+':'-'}${(data.payout_sol || data.amount_sol||0).toFixed(2)}</span>`;
       hist.prepend(entry);
       if (hist.children.length > 8) hist.lastElementChild.remove();
     }
@@ -143,9 +161,9 @@
       document.getElementById('houseBalance').textContent = data.house_balance_sol.toFixed(3);
     }
 
-    function connectWallet() { alert("Full Phantom connect ready – reply if you want v4"); }
     function showProvable() { alert("Server seed rotates every 100 flips. Full proof available after each round."); }
 
+    // Boot
     updateHouseBalance();
     setInterval(updateHouseBalance, 20000);
   </script>
