@@ -34,15 +34,14 @@ def get_deposit():
     data = request.json
     user_id = data.get('user_id', secrets.token_hex(12))
     
-    # Generate unique deposit address per user
     if user_id not in user_deposits:
-        user_deposits[user_id] = Keypair.generate()
+        user_deposits[user_id] = Keypair()  # Fixed: Keypair() not .generate()
     
     deposit_kp = user_deposits[user_id]
     return jsonify({
         "deposit_address": str(deposit_kp.pubkey()),
         "user_id": user_id,
-        "note": "Send SOL here. Funds auto credited."
+        "note": "Send SOL here. Funds credited automatically."
     })
 
 @app.route('/flip', methods=['POST'])
@@ -65,11 +64,16 @@ def coin_flip():
     random_int = int(vrf_hash, 16) % 2
     flip_result = "heads" if random_int == 0 else "tails"
 
-    if (user_choice is None) or (flip_result == user_choice):
+    won = (user_choice is None) or (flip_result == user_choice)
+    if won:
         payout = int(amount_lamports * 1.98)
         balances[user_id] += payout
+        payout_sol = round(payout / 1e9, 4)
+    else:
+        payout_sol = 0
+
     save_balances()
-    return jsonify({"result": flip_result, "won": flip_result == user_choice, "payout_sol": round(payout / 1e9, 4) if flip_result == user_choice else 0})
+    return jsonify({"result": flip_result, "won": won, "payout_sol": payout_sol})
 
 @app.route('/balance', methods=['POST'])
 def user_balance():
