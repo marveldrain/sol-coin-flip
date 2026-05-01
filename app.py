@@ -18,12 +18,8 @@ RPC = "https://api.devnet.solana.com"
 client = Client(RPC)
 SERVER_SEED = secrets.token_hex(32)
 
-# Simple persistent storage
 BALANCES_FILE = Path("balances.json")
-if BALANCES_FILE.exists():
-    balances = json.loads(BALANCES_FILE.read_text())
-else:
-    balances = {}  # user_deposit_address: balance_lamports
+balances = json.loads(BALANCES_FILE.read_text()) if BALANCES_FILE.exists() else {}
 
 def save_balances():
     BALANCES_FILE.write_text(json.dumps(balances))
@@ -35,9 +31,12 @@ def index():
 @app.route('/get_deposit_address', methods=['POST'])
 def get_deposit():
     data = request.json
-    user_id = data.get('user_id', secrets.token_hex(8))  # Simple session ID
-    deposit_pubkey = str(HOUSE_KEYPAIR.pubkey())  # For MVP we use same address + memo (real version uses PDA later)
-    return jsonify({"deposit_address": deposit_pubkey, "memo": user_id})
+    user_id = data.get('user_id', secrets.token_hex(8))
+    return jsonify({
+        "deposit_address": str(HOUSE_KEYPAIR.pubkey()),
+        "memo": user_id,
+        "note": "Send SOL to this address"
+    })
 
 @app.route('/flip', methods=['POST'])
 def coin_flip():
@@ -51,10 +50,8 @@ def coin_flip():
     if user_id not in balances or balances[user_id] < amount_lamports:
         return jsonify({"error": "Insufficient balance"})
 
-    # Deduct bet
     balances[user_id] -= amount_lamports
 
-    # Provably Fair
     recent_blockhash = str(client.get_latest_blockhash().value.blockhash)
     combined = f"{SERVER_SEED}:{user_id}:{recent_blockhash}:{time.time()}".encode()
     vrf_hash = hashlib.sha256(combined).hexdigest()
@@ -77,10 +74,30 @@ def user_balance():
     bal = balances.get(user_id, 0) / 1e9
     return jsonify({"balance_sol": round(bal, 4)})
 
-@app.route('/house_balance', methods=['GET'])
-def house_balance():
-    bal = client.get_balance(HOUSE_KEYPAIR.pubkey()).value / 1e9
-    return jsonify({"house_balance_sol": round(bal, 4)})
+@app.route('/withdraw', methods=['POST'])
+def withdraw():
+    data = request.json
+    user_id = data['user_id']
+    amount_sol = float(data['amount_sol'])
+    destination = data['destination']
+
+    amount_lamports = int(amount_sol * 1_000_000_000)
+    if user_id not in balances or balances[user_id] < amount_lamports:
+        return jsonify({"error": "Insufficient balance"})
+
+    balances[user_id] -= amount_lamports
+    save_balances()
+
+    try:
+        tx = Transaction().add(transfer(TransferParams(
+            from_pubkey=HOUSE_KEYPAIR.pubkey(),
+            to_pubkey=Pubkey.from_string(destination),
+            lamports=amount_lamports
+        )))
+        tx_sig = client.send_transaction(tx, HOUSE_KEYPAIR).value
+        return jsonify({"success": True, "tx": str(tx_sig)})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
