@@ -14,13 +14,13 @@ from pathlib import Path
 app = Flask(__name__)
 
 HOUSE_KEYPAIR = Keypair.from_base58_string(os.getenv("HOUSE_PRIVATE_KEY"))
-RPC = "https://api.devnet.solana.com"
+RPC = "https://api.testnet.solana.com"   # ← NOW ON TESTNET
 client = Client(RPC)
 SERVER_SEED = secrets.token_hex(32)
 
 BALANCES_FILE = Path("balances.json")
 balances = json.loads(BALANCES_FILE.read_text()) if BALANCES_FILE.exists() else {}
-user_deposits = {}  # user_id -> deposit_keypair
+user_deposits = {}
 
 def save_balances():
     BALANCES_FILE.write_text(json.dumps(balances))
@@ -35,12 +35,13 @@ def get_deposit():
     user_id = data.get('user_id', secrets.token_hex(12))
     
     if user_id not in user_deposits:
-        user_deposits[user_id] = Keypair()   # Fixed correct constructor
+        user_deposits[user_id] = Keypair()
     
     deposit_kp = user_deposits[user_id]
     return jsonify({
         "deposit_address": str(deposit_kp.pubkey()),
-        "user_id": user_id
+        "user_id": user_id,
+        "note": "Send SOL to this address (Testnet)"
     })
 
 @app.route('/balance', methods=['POST'])
@@ -48,21 +49,16 @@ def user_balance():
     data = request.json
     user_id = data['user_id']
     
-    # AUTO CREDIT - Check real on-chain balance
     if user_id in user_deposits:
         deposit_pubkey = user_deposits[user_id].pubkey()
         onchain_bal = client.get_balance(deposit_pubkey).value
-        
-        # Credit any new SOL received
-        current = balances.get(user_id, 0)
-        if onchain_bal > current:
+        if onchain_bal > balances.get(user_id, 0):
             balances[user_id] = onchain_bal
             save_balances()
     
     bal = balances.get(user_id, 0) / 1e9
     return jsonify({"balance_sol": round(bal, 4)})
 
-# Keep flip and withdraw same as before (copy from previous if needed)
 @app.route('/flip', methods=['POST'])
 def coin_flip():
     data = request.json
@@ -96,7 +92,6 @@ def coin_flip():
 
 @app.route('/withdraw', methods=['POST'])
 def withdraw():
-    # same as previous version
     data = request.json
     user_id = data['user_id']
     amount_sol = float(data['amount_sol'])
