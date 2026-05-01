@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>FLIPX • marveldrainer</title>
+  <title>SOL FLIPX • </title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
@@ -28,27 +28,22 @@
       </div>
     </div>
 
-    <!-- Deposit -->
     <div class="glass rounded-3xl p-6 mb-6">
-      <div class="text-xs tracking-widest mb-2">YOUR DEPOSIT ADDRESS</div>
-      <div onclick="copyAddress()" id="depositAddr" class="bg-black p-4 rounded-2xl font-mono text-sm break-all cursor-pointer">Click to generate</div>
-      <div class="text-[10px] text-emerald-300/70 mt-2">Send SOL here • Use memo if shown</div>
+      <div class="text-xs tracking-widest mb-2">DEPOSIT ADDRESS</div>
+      <div onclick="copyAddress()" id="depositAddr" class="bg-black p-4 rounded-2xl font-mono text-sm break-all cursor-pointer">Loading...</div>
     </div>
 
-    <!-- Balance -->
     <div class="glass rounded-3xl p-4 flex justify-between items-center mb-8">
       <div>BALANCE: <span id="userBalance" class="text-2xl text-emerald-300 font-mono">0.00</span> SOL</div>
       <button onclick="refreshBalance()" class="text-xs border border-emerald-400 px-4 py-2 rounded-xl">REFRESH</button>
     </div>
 
-    <!-- Coin -->
     <div class="relative flex justify-center mb-10">
       <div id="coin" onclick="placeFlip(null)" class="coin w-64 h-64 bg-gradient-to-br from-yellow-300 to-amber-500 rounded-full border-8 border-yellow-200 flex items-center justify-center text-7xl cursor-pointer">
         <div id="coinFace" class="font-black text-black">⟳</div>
       </div>
     </div>
 
-    <!-- Bet -->
     <div class="glass rounded-3xl p-6 border border-emerald-500/30">
       <div class="text-xs tracking-[2px] mb-3 text-emerald-300">BET AMOUNT</div>
       <div class="flex items-center bg-black rounded-2xl p-1 mb-6">
@@ -64,6 +59,13 @@
       <button onclick="placeFlip(null)" class="w-full py-6 bg-white text-black rounded-3xl text-xl font-bold flex items-center justify-center gap-3 active:scale-95">
         <i class="fa-solid fa-bolt text-2xl"></i> LAUNCH FLIP
       </button>
+
+      <div class="mt-6 pt-6 border-t border-emerald-500/30">
+        <div class="text-xs tracking-[2px] mb-3 text-emerald-300">WITHDRAW</div>
+        <input id="withdrawAmount" type="number" value="0.5" step="0.1" class="w-full bg-black rounded-2xl p-4 text-xl mb-3">
+        <input id="withdrawAddr" type="text" placeholder="Your Solana Address" class="w-full bg-black rounded-2xl p-4 text-sm mb-3">
+        <button onclick="withdraw()" class="w-full py-5 bg-rose-500 text-white rounded-3xl text-xl font-bold">WITHDRAW SOL</button>
+      </div>
     </div>
 
     <div class="flex justify-between text-[10px] mt-8 text-emerald-300/70 px-2">
@@ -149,6 +151,25 @@
       }, 1500);
     }
 
+    async function withdraw() {
+      const amount = parseFloat(document.getElementById('withdrawAmount').value);
+      const dest = document.getElementById('withdrawAddr').value;
+      if (amount <= 0 || !dest) return alert("Fill all fields");
+
+      const resp = await fetch('/withdraw', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId, amount_sol: amount, destination: dest})
+      });
+      const data = await resp.json();
+      if (data.success) {
+        alert("Withdrawal sent! Tx: " + data.tx);
+        refreshBalance();
+      } else {
+        alert(data.error || "Failed");
+      }
+    }
+
     function resetButtons() {
       document.getElementById('headsBtn').disabled = false;
       document.getElementById('tailsBtn').disabled = false;
@@ -165,14 +186,13 @@
     function copyAddress() {
       const addr = document.getElementById('depositAddr').textContent;
       navigator.clipboard.writeText(addr);
-      alert("Address copied! Send SOL to it.");
+      alert("Address copied! Send SOL from Phantom.");
     }
 
     function showProvable() {
       alert("Provably fair using server seed + user ID + blockhash.");
     }
 
-    // Boot
     init();
     refreshBalance();
     setInterval(refreshBalance, 15000);
