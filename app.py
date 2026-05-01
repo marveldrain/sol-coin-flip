@@ -20,6 +20,7 @@ SERVER_SEED = secrets.token_hex(32)
 
 BALANCES_FILE = Path("balances.json")
 balances = json.loads(BALANCES_FILE.read_text()) if BALANCES_FILE.exists() else {}
+user_deposits = {}  # user_id -> deposit_keypair
 
 def save_balances():
     BALANCES_FILE.write_text(json.dumps(balances))
@@ -31,11 +32,17 @@ def index():
 @app.route('/get_deposit_address', methods=['POST'])
 def get_deposit():
     data = request.json
-    user_id = data.get('user_id', secrets.token_hex(8))
+    user_id = data.get('user_id', secrets.token_hex(12))
+    
+    # Generate unique deposit address per user
+    if user_id not in user_deposits:
+        user_deposits[user_id] = Keypair.generate()
+    
+    deposit_kp = user_deposits[user_id]
     return jsonify({
-        "deposit_address": str(HOUSE_KEYPAIR.pubkey()),
-        "memo": user_id,
-        "note": "Send SOL to this address"
+        "deposit_address": str(deposit_kp.pubkey()),
+        "user_id": user_id,
+        "note": "Send SOL here. Funds auto credited."
     })
 
 @app.route('/flip', methods=['POST'])
@@ -61,11 +68,8 @@ def coin_flip():
     if (user_choice is None) or (flip_result == user_choice):
         payout = int(amount_lamports * 1.98)
         balances[user_id] += payout
-        save_balances()
-        return jsonify({"result": flip_result, "won": True, "payout_sol": round(payout / 1e9, 4)})
-    else:
-        save_balances()
-        return jsonify({"result": flip_result, "won": False})
+    save_balances()
+    return jsonify({"result": flip_result, "won": flip_result == user_choice, "payout_sol": round(payout / 1e9, 4) if flip_result == user_choice else 0})
 
 @app.route('/balance', methods=['POST'])
 def user_balance():
